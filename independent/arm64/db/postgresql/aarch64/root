@@ -1,0 +1,2 @@
+0 * * * * /usr/sbin/logrotate /opt/etc/logrotate/*.conf > /dev/null 2>&1
+

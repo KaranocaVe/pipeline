@@ -1,0 +1,47 @@
+#！/bin/bash
+set -exu
+
+# 获取服务路径
+echo $(pwd)
+echo "workspace: " "${WORKSPACE}"
+
+# 获取服务参数
+image_name="fit-runtime-python"
+mkdir -p ${WORKSPACE}/framework/fit/fit-python/build
+CURRENT_WORKSPACE=${WORKSPACE}/framework/fit/fit-python
+CURRENT_BUILD_DIR=${CURRENT_WORKSPACE}/build
+PUBLIC_DIR=${WORKSPACE}/public
+cd ${CURRENT_WORKSPACE}
+PLATFORM=aarch64
+ENV_TYPE=aarch64
+VERSION=${1:-"opensource-1.0.0"}
+base_image="quay.io/openeuler/openeuler:latest"
+packageDir="${CURRENT_WORKSPACE}/package"
+mkdir -p ${packageDir}
+rm -rf ${packageDir}/*
+
+cd ${packageDir}
+
+FIT_FRAMEWORK_DIR=${WORKSPACE}/../../../fit-framework
+APP_PLATFORM_DIR=${WORKSPACE}/../../../app-platform
+
+mkdir python
+chmod +x python
+cp -r ${FIT_FRAMEWORK_DIR}/framework/fit/python/* python/
+
+cp -r ${APP_PLATFORM_DIR}/app-builder/plugins/fit_py_code_node_tools python/plugin/
+cp -r ${APP_PLATFORM_DIR}/app-builder/plugins/fit_py_internet_search python/plugin/
+cp ${APP_PLATFORM_DIR}/app-builder/plugins/requirements.txt python/fel-requirements.txt
+
+# 添加动态加载插件目录
+cd python
+mkdir custom_dynamic_plugins
+cd ..
+
+cp ${CURRENT_WORKSPACE}/root ${packageDir}
+cp ${CURRENT_WORKSPACE}/Dockerfile_${ENV_TYPE} ${packageDir}/Dockerfile
+cp ${CURRENT_WORKSPACE}/fit_start.sh ${packageDir}
+
+# 打包镜像 (ARM64)
+docker build --file=${packageDir}/Dockerfile --build-arg BASE=${base_image} --build-arg PLAT_FORM=${ENV_TYPE} -t ${image_name}:${VERSION} ${packageDir}
+

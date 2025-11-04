@@ -1,0 +1,83 @@
+services:
+  jade-db:
+    container_name: jade-db
+    hostname: jade-db
+    image: ${REPO}/postgres:15.2-${VERSION}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      my-net:
+        ipv4_address: 172.0.0.98
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "ModelEngine@123"
+      LOG_HOME: /log/app
+    volumes:
+      - "./appengine/jade-db:/var/lib/postgresql/data"
+      - "./appengine/log:/log/app/postgresql"
+    ports:
+      - "5432:5432"
+
+  sql-initializer:
+    container_name: sql-initializer
+    hostname: sql-initializer
+    image: ${REPO}/app-builder:${VERSION}
+    networks:
+      my-net:
+        ipv4_address: 172.0.0.97
+    volumes:
+    - ./appengine/sql:/opt/appbuilder/sql
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      rm -rf /opt/appbuilder/sql/*
+      mv -f /opt/sql/* /opt/appbuilder/sql/
+      
+      touch /opt/appbuilder/sql/.initialization_complete
+      echo 'SQL files initialized.'
+      "
+
+  db-initializer:
+    container_name: db-initializer
+    hostname: db-initializer
+    image: ${REPO}/postgres:15.2-${VERSION}
+    depends_on:
+      jade-db:
+        condition: service_healthy
+      sql-initializer:
+        condition: service_completed_successfully
+    networks:
+      my-net:
+        ipv4_address: 172.0.0.99
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "ModelEngine@123"
+      LOG_HOME: /log/app
+      DB_HOST: jade-db
+      DB_PORT: 5432
+      DB_USER: postgres
+      IS_UPGRADE: ${IS_UPGRADE}
+      APIKEY: ${APIKEY}
+    volumes:
+      - ./appengine/sql:/opt/sql
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      " 
+      chmod +x /opt/initDB.sh
+      sed -i "s#TODO#${APIKEY}#g" /opt/sql/init/data/tr_init_models.sql
+      bash /opt/initDB.sh app_builder /opt/sql
+      "
+    restart: "no"
+
+networks:
+  my-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.0.0.0/24
+          gateway: 172.0.0.1
+
